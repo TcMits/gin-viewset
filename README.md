@@ -1,4 +1,4 @@
-# Gin ViewSet
+# gin-viewset
 
 ## About the project
 
@@ -45,10 +45,12 @@ go get github.com/TcMits/gin-viewset
 ```
 Import it in your code:<br />
 ```go
-import "github.com/TcMits/gin-viewset"
+import viewset "github.com/TcMits/gin-viewset"
 ```
 
 ### Example
+
+[File](https://github.com/TcMits/gin-viewset/blob/main/examples/main.go)
 
 ```go
 package main
@@ -153,6 +155,51 @@ func main() {
 	)
 	viewSet.Register(r)
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+}
+```
+```
+$ go run example.go
+```
+See the logs
+```
+ - using env:   export GIN_MODE=release
+ - using code:  gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /users/                   --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] GET    /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] POST   /users/                   --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] PUT    /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] PATCH  /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] DELETE /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Environment variable PORT is undefined. Using port :8080 by default
+```
+
+
+Example listing view:
+```json
+{
+  "meta": {
+    "count": 1
+  },
+  "results": [
+    {
+      "age": 20,
+      "name": "test",
+      "pk": 1
+    }
+  ]
+}
+```
+
+
+Example detail view:
+```json
+{
+  "age": 20,
+  "name": "test",
+  "pk": 1
 }
 ```
 
