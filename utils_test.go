@@ -34,13 +34,13 @@ func (tf testField) Serialize(object *testObject, c *gin.Context) (any, error) {
 
 func (om *testObjectManager) GetObjects(
 	dest *[]*testObject,
-	pagiantedMeta *gin.H,
+	paginatedMeta *gin.H,
 	c *gin.Context,
 ) error {
 	if om.RaiseError {
 		return errors.New("Get objects error")
 	}
-	(*pagiantedMeta)["count"] = len(om.Database)
+	(*paginatedMeta)["count"] = len(om.Database)
 	for i := range om.Database {
 		*dest = append(*dest, &om.Database[i])
 	}

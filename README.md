@@ -80,10 +80,10 @@ type PersonManager struct {
 
 func (pm *PersonManager) GetObjects(
 	dest *[]*Person,
-	pagiantedMeta *gin.H,
+	paginatedMeta *gin.H,
 	c *gin.Context,
 ) error {
-	(*pagiantedMeta)["count"] = len(pm.Database)
+	(*paginatedMeta)["count"] = len(pm.Database)
 	for i := range pm.Database {
 		*dest = append(*dest, &pm.Database[i])
 	}
