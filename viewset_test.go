@@ -2,374 +2,668 @@ package viewset
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewViewSet(t *testing.T) {
+	basePath := "/objects"
+	additionalActions := []Route[testObject, testObjectRequest]{}
+	additionalActions = append(additionalActions,
+		Route[testObject, testObjectRequest]{
+			Action:  "send",
+			SubPath: "/:pk/send",
+			Method:  http.MethodPut,
+			Handler: func(_ string, _ *ViewSet[testObject, testObjectRequest], _ *gin.Context) {
+			},
+		},
+	)
 
-type testObject struct {
-    Pk string `json:"pk" form:"pk"`
-    Name string `json:"name" form:"name"`
-	Address string `json:"address" form:"address"`
+	objectManager := &testObjectManager{}
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, additionalActions, objectManager, nil, nil, nil, nil,
+	)
+
+	assert.Equal(t, basePath, viewSet.BasePath)
+	assert.Equal(t, 7, len(viewSet.Actions))
+	assert.Equal(t, objectManager, viewSet.ObjectManager)
+	assert.NotEqual(t, nil, viewSet.ExceptionHandler)
+	assert.NotEqual(t, nil, viewSet.PermissionChecker)
+	assert.NotEqual(t, nil, viewSet.Serializer)
+	assert.NotEqual(t, nil, viewSet.FormValidator)
 }
 
-type testObjectResponse struct {
-    Pk string `json:"pk" form:"pk"`
-    Name string `json:"name" form:"name"`
-	Address string `json:"address" form:"address"`
-    AdditionalData string `json:"additional_data"`
+func TestNewViewSetWithExcludeActions(t *testing.T) {
+	basePath := "/objects"
+	excludeActions := []string{}
+	excludeActions = append(excludeActions, DEFAULT_UPDATE_ACTION)
+
+	objectManager := &testObjectManager{}
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", excludeActions, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	assert.Equal(t, basePath, viewSet.BasePath)
+	assert.Equal(t, 4, len(viewSet.Actions))
 }
 
-type testObjectRequest struct {
-    Name string `json:"name" form:"name" binding:"required"`
-	Address string `json:"address" form:"address" binding:"required"`
+func TestViewSetRegister(t *testing.T) {
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+	router := SetUpRouter()
+	viewSet.Register(router)
+
+	assert.Equal(t, 6, len(router.Routes()))
 }
 
-type testObjectManager struct {
-    objects []testObject
-    couter int
+func TestGetHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	basePath := "/objects"
+	objectManager := &testObjectManager{}
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+	callBack := ""
+
+	handler := getHandler(
+		"test",
+		viewSet,
+		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) { callBack = "test" },
+	)
+
+	handler(c)
+	assert.Equal(t, "test", callBack)
 }
 
-type testSerializer struct {}
+func TestGetHandlerWithPermissionError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
 
+	basePath := "/objects"
+	permissionChecker := &MockDeniedAny{}
 
+	objectManager := &testObjectManager{}
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, permissionChecker, nil, nil,
+	)
 
-func (om *testObjectManager) GetObjects(
-    c *gin.Context,
-) (interface{}, interface{}) {
-    objects := &[]*testObject{}
-    for i := range om.objects {
-        *objects = append(*objects, &om.objects[i])
-    }
-    return objects, map[string]interface{}{
-        "count": len(*objects),
-    }
+	handler := getHandler(
+		"test",
+		viewSet,
+		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) {},
+	)
+
+	handler(c)
+	assert.Equal(t, `{"message":"Denied"}`, blw.MockBody.String())
+	assert.Equal(t, http.StatusForbidden, blw.MockStatusCode)
 }
 
+func TestList(t *testing.T) {
+	mockResponse := `{"meta":{"count":1},"results":[{"age":20,"name":"test"}]}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
 
-func (om *testObjectManager) GetObject(
-    detailURLLookup string,
-    c *gin.Context,
-) (interface{}, error) {
-    lookup := c.Param(detailURLLookup)
-    for i, obj := range om.objects {
-        if obj.Pk == lookup {
-            return &om.objects[i], nil
-        }
-    }
-    return nil, fmt.Errorf("Object not found")
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	List(DEFAULT_LIST_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusOK, blw.MockStatusCode)
 }
 
+func TestListWithGetObjectsError(t *testing.T) {
+	mockResponse := `{"message":"Get objects error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
 
-func (om *testObjectManager) Save(object interface{}, c *gin.Context) error {
-    o, ok := object.(*testObject)
-    if !ok {
-        return fmt.Errorf("Object can't update")
-    }
-    if o.Pk == "" {
-        // create
-        om.couter += 1
-        o.Pk = strconv.Itoa(om.couter)
-        om.objects = append(om.objects, *o)
-    } else {
-        for i, obj := range om.objects {
-            if obj.Pk == o.Pk {
-                om.objects[i].Name = o.Name
-                om.objects[i].Address = o.Address
-                break
-            }
-        }
-    }
-    return nil
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{RaiseError: true}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	List(DEFAULT_LIST_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusInternalServerError, blw.MockStatusCode)
 }
 
+func TestListWithSerializeError(t *testing.T) {
+	mockResponse := `{"message":"Many serialize error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
 
-func (om *testObjectManager) Remove(object interface{}, c *gin.Context) error {
-    o, ok := object.(*testObject)
-    if !ok {
-        return fmt.Errorf("Object can't delete")
-    }
+	basePath := "/objects"
+	serializer := &MockSerializerAlwaysError[testObject]{}
 
-    for i, obj := range om.objects {
-        if o.Pk == obj.Pk {
-            om.objects = append(om.objects[:i], om.objects[i + 1:]...)
-            om.couter -= 1
-            return nil
-        }
-    }
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
+	)
 
-    return fmt.Errorf("Object not found")
+	List(DEFAULT_LIST_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusInternalServerError, blw.MockStatusCode)
 }
 
-func (ser *testSerializer) Serialize(
-    object interface{},
-    c *gin.Context,
-) (interface{}) {
-    d := &testObjectResponse{}
-    o, okO := object.(*testObject)
-    if !okO {
-        return nil
-    }
-    d.Pk = o.Pk
-    d.Name = o.Name
-    d.Address = o.Address
-    d.AdditionalData = "testing"
-    return d
+func TestRetrieve(t *testing.T) {
+	mockResponse := `{"age":20,"name":"test"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
+
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Retrieve(DEFAULT_RETRIEVE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusOK, blw.MockStatusCode)
 }
 
+func TestRetrieveWithGetObjectError(t *testing.T) {
+	mockResponse := `{"message":"Object not found"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "2",
+		},
+	}
 
-func (ser *testSerializer) ManySerialize(
-    objects interface{},
-    c *gin.Context,
-) (interface{}) {
-    objectsResponse := &[]interface{}{}
-    objs, ok := objects.(*[]*testObject)
-    if !ok {return &[]*testObjectResponse{}}
-    for i := range *objs {
-        *objectsResponse = append(
-            *objectsResponse, 
-            ser.Serialize((*objs)[i], c),
-        )
-    }
-    return objectsResponse
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Retrieve(DEFAULT_RETRIEVE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusNotFound, blw.MockStatusCode)
 }
 
+func TestRetrieveWithSerializeError(t *testing.T) {
+	mockResponse := `{"message":"Serialize error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
 
-func (ser *testSerializer) GetValidatedData(
-    object interface{}, c *gin.Context,
-) (interface{}, error) {
-    d := &testObject{}
-    if object != nil {
-        // copy current opject to update
-        o, okO := object.(*testObject)
-        if !okO {
-            return nil, fmt.Errorf("Invalid")
-        }
-        d.Pk = o.Pk
-        d.Name = o.Name
-        d.Address = o.Address
-    }
-    request := testObjectRequest{}
-    if err := c.ShouldBindJSON(&request); err != nil {
-        return nil, err
-    }
-    d.Name = request.Name
-    d.Address = request.Address
-    return d, nil
+	basePath := "/objects"
+	serializer := &MockSerializerAlwaysError[testObject]{}
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
+	)
+
+	Retrieve(DEFAULT_RETRIEVE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusInternalServerError, blw.MockStatusCode)
 }
 
+func TestCreate(t *testing.T) {
+	mockResponse := `{"age":21,"name":"test 2"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
 
-func SetUpRouter() *gin.Engine{
-    gin.SetMode(gin.TestMode)
-    router := gin.Default()
-    return router
+	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
+
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Create(DEFAULT_CREATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusCreated, blw.MockStatusCode)
 }
 
-func TestRegisterListingAction(t *testing.T) {
-    mockResponse := `{"meta":{"count":0},"results":[]}`
-    var objectManager ObjectManager = &testObjectManager{}
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
+func TestCreateWithValidateError(t *testing.T) {
+	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
 
-    req, _ := http.NewRequest("GET", "/api/test-objects/", nil)
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	MockJsonPost(c, map[string]interface{}{"name": "test 2"})
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusOK, w.Code)
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Create(DEFAULT_CREATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusBadRequest, blw.MockStatusCode)
 }
 
+func TestCreateWithSaveError(t *testing.T) {
+	mockResponse := `{"message":"Saving error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
 
+	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-func TestRegisterListingActionWithObjects(t *testing.T) {
-    mockResponse := `{"meta":{"count":1},"results":[{"pk":"1","name":"test","address":"test","additional_data":"testing"}]}`
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
+	basePath := "/objects"
 
-    req, _ := http.NewRequest("GET", "/api/test-objects/", nil)
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	objectManager := &testObjectManager{RaiseError: true}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusOK, w.Code)
+	Create(DEFAULT_CREATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusBadRequest, blw.MockStatusCode)
 }
 
+func TestCreateWithSerializeError(t *testing.T) {
+	mockResponse := `{"message":"Serialize error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
 
-func TestRegisterRetrieveAction(t *testing.T) {
-    mockResponse := `{"message":"Object not found"}`
-    var objectManager ObjectManager = &testObjectManager{}
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
+	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-    req, _ := http.NewRequest("GET", "/api/test-objects/1/", nil)
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	basePath := "/objects"
+	serializer := &MockSerializerAlwaysError[testObject]{}
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusNotFound, w.Code)
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
+	)
+
+	Create(DEFAULT_CREATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusInternalServerError, blw.MockStatusCode)
 }
 
+func TestUpdate(t *testing.T) {
+	mockResponse := `{"age":21,"name":"test 2"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
 
-func TestRegisterRetrieveActionWithObject(t *testing.T) {
-    mockResponse := `{"pk":"1","name":"test","address":"test","additional_data":"testing"}`
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
+	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-    req, _ := http.NewRequest("GET", "/api/test-objects/1/", nil)
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	basePath := "/objects"
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusOK, w.Code)
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Update(DEFAULT_UPDATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusOK, blw.MockStatusCode)
 }
 
+func TestUpdateWithGetObjectError(t *testing.T) {
+	mockResponse := `{"message":"Object not found"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "2",
+		},
+	}
 
+	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-func TestRegisterCreateAction(t *testing.T) {
-    mockResponse := `{"pk":"2","name":"test 2","address":"test 2","additional_data":"testing"}`
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
-    payload, _ := json.Marshal(map[string]interface{}{
-        "name": "test 2",
-        "address": "test 2",
-    })
+	basePath := "/objects"
 
-    req, _ := http.NewRequest("POST", "/api/test-objects/", bytes.NewBuffer(payload))
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusCreated, w.Code)
+	Update(DEFAULT_UPDATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusNotFound, blw.MockStatusCode)
 }
 
+func TestUpdateWithValidateError(t *testing.T) {
+	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
 
-func TestRegisterUpdateActionWithObject(t *testing.T) {
-    mockResponse := `{"pk":"1","name":"test testing","address":"test testing","additional_data":"testing"}`
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
-    payload, _ := json.Marshal(map[string]interface{}{
-        "name": "test testing",
-        "address": "test testing",
-    })
+	MockJsonPut(c, map[string]interface{}{"name": "test 2"})
 
-    req, _ := http.NewRequest("PUT", "/api/test-objects/1/", bytes.NewBuffer(payload))
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	basePath := "/objects"
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusOK, w.Code)
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Update(DEFAULT_UPDATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusBadRequest, blw.MockStatusCode)
 }
 
+func TestUpdateWithSaveError(t *testing.T) {
+	mockResponse := `{"message":"Saving error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
 
-func TestRegisterPartialUpdateAction(t *testing.T) {
-    mockResponse := `{"pk":"1","name":"test testing","address":"test testing","additional_data":"testing"}`
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
-    payload, _ := json.Marshal(map[string]interface{}{
-        "name": "test testing",
-        "address": "test testing",
-    })
+	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-    req, _ := http.NewRequest("PATCH", "/api/test-objects/1/", bytes.NewBuffer(payload))
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	basePath := "/objects"
 
-    responseData, _ := ioutil.ReadAll(w.Body)
-    assert.Equal(t, mockResponse, string(responseData))
-    assert.Equal(t, http.StatusOK, w.Code)
+	objectManager := &testObjectManager{RaiseError: true}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Update(DEFAULT_UPDATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusBadRequest, blw.MockStatusCode)
 }
 
+func TestUpdateWithSerializeError(t *testing.T) {
+	mockResponse := `{"message":"Serialize error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
 
-func TestRegisterPartialDestroyAction(t *testing.T) {
-    objects := []testObject{}
-    objects = append(objects, testObject{ Pk: "1", Name: "test", Address: "test", })
-    var objectManager ObjectManager = &testObjectManager{
-        objects: objects,
-        couter: 1,
-    }
-    var serializer Serializer = &testSerializer{}
-    r := SetUpRouter()
-    rg := r.Group("/api")
-    {
-        Register(rg, "/test-objects", "pk", objectManager, serializer, []int{})
-    }
+	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
 
-    req, _ := http.NewRequest("DELETE", "/api/test-objects/1/", nil)
-    w := httptest.NewRecorder()
-    r.ServeHTTP(w, req)
+	basePath := "/objects"
+	serializer := &MockSerializerAlwaysError[testObject]{}
 
-    assert.Equal(t, http.StatusNoContent, w.Code)
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
+	)
+
+	Update(DEFAULT_UPDATE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusInternalServerError, blw.MockStatusCode)
 }
 
+func TestDelete(t *testing.T) {
+	mockResponse := ``
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
+	c.Request.Method = "DELETE"
+
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Delete(DEFAULT_DELETE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusNoContent, blw.MockStatusCode)
+}
+
+func TestDeleteWithGetObjectError(t *testing.T) {
+	mockResponse := `{"message":"Object not found"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "2",
+		},
+	}
+	c.Request.Method = "DELETE"
+
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Delete(DEFAULT_DELETE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusNotFound, blw.MockStatusCode)
+}
+
+func TestDeleteWithDeleteError(t *testing.T) {
+	mockResponse := `{"message":"Deleting error"}`
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+	c.Writer = blw
+	c.Request = &http.Request{
+		Header: make(http.Header),
+	}
+	c.Params = []gin.Param{
+		{
+			Key:   "pk",
+			Value: "1",
+		},
+	}
+	c.Request.Method = "DELETE"
+
+	basePath := "/objects"
+
+	objectManager := &testObjectManager{RaiseError: true}
+	objectManager.Database = append(
+		objectManager.Database,
+		testObject{Pk: 1, Name: "test", Age: 20},
+	)
+	viewSet := NewViewSet[testObject, testObjectRequest](
+		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
+	)
+
+	Delete(DEFAULT_DELETE_ACTION, viewSet, c)
+
+	assert.Equal(t, mockResponse, blw.MockBody.String())
+	assert.Equal(t, http.StatusBadRequest, blw.MockStatusCode)
+}

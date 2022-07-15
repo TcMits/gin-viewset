@@ -1,0 +1,57 @@
+package viewset
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+type ViewSetError struct {
+	message    string
+	StatusCode int
+	ActualErr  error
+}
+
+func (err ViewSetError) Error() string {
+	return err.message
+}
+
+func (err ViewSetError) Unwrap() error {
+	return err.ActualErr
+}
+
+type DefaultExceptionHandler struct{}
+
+func NewViewSetError(message string, statusCode int, baseError error) *ViewSetError {
+	return &ViewSetError{
+		message:    message,
+		StatusCode: statusCode,
+		ActualErr:  baseError,
+	}
+}
+
+func (h *DefaultExceptionHandler) Handle(err error, c *gin.Context) {
+	switch foundedErr := err.(type) {
+	case *ViewSetError:
+		c.AbortWithStatusJSON(
+			foundedErr.StatusCode,
+			gin.H{
+				"message": foundedErr.Error(),
+			},
+		)
+	case ViewSetError:
+		c.AbortWithStatusJSON(
+			foundedErr.StatusCode,
+			gin.H{
+				"message": foundedErr.Error(),
+			},
+		)
+	default:
+		c.AbortWithStatusJSON(
+			http.StatusBadRequest,
+			gin.H{
+				"message": foundedErr.Error(),
+			},
+		)
+	}
+}
