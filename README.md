@@ -2,7 +2,7 @@
 
 ## About the project
 
-Gin basic GRUD endpoint/handler for objects
+Gin basic CRUD endpoint/handler for objects
 
 ### But Why?!
 
