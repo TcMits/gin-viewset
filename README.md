@@ -45,7 +45,7 @@ go get github.com/TcMits/viewset
 ```
 Import it in your code:<br />
 ```go
-import viewset "github.com/TcMits/viewset"
+import "github.com/TcMits/viewset"
 ```
 
 ### Example
@@ -59,7 +59,7 @@ import (
 	"errors"
 	"strconv"
 
-	viewset "github.com/TcMits/viewset"
+	"github.com/TcMits/viewset"
 	"github.com/gin-gonic/gin"
 )
 
