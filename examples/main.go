@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strconv"
 
-	viewset "github.com/TcMits/gin-viewset"
+	"github.com/TcMits/viewset"
 	"github.com/gin-gonic/gin"
 )
 

@@ -1,4 +1,4 @@
-# gin-viewset
+# viewset
 
 ## About the project
 
@@ -41,16 +41,16 @@ Inspired by [Django Rest Framework](https://www.django-rest-framework.org/)
 
 Download and install it:<br />
 ```
-go get github.com/TcMits/gin-viewset
+go get github.com/TcMits/viewset
 ```
 Import it in your code:<br />
 ```go
-import viewset "github.com/TcMits/gin-viewset"
+import viewset "github.com/TcMits/viewset"
 ```
 
 ### Example
 
-[File](https://github.com/TcMits/gin-viewset/blob/main/examples/main.go)
+[File](https://github.com/TcMits/viewset/blob/main/examples/main.go)
 
 ```go
 package main
@@ -59,7 +59,7 @@ import (
 	"errors"
 	"strconv"
 
-	viewset "github.com/TcMits/gin-viewset"
+	viewset "github.com/TcMits/viewset"
 	"github.com/gin-gonic/gin"
 )
 
@@ -165,12 +165,12 @@ See the logs
  - using env:   export GIN_MODE=release
  - using code:  gin.SetMode(gin.ReleaseMode)
 
-[GIN-debug] GET    /users/                   --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
-[GIN-debug] GET    /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
-[GIN-debug] POST   /users/                   --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
-[GIN-debug] PUT    /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
-[GIN-debug] PATCH  /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
-[GIN-debug] DELETE /users/:pk                --> github.com/TcMits/gin-viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] GET    /users/                   --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] GET    /users/:pk                --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] POST   /users/                   --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] PUT    /users/:pk                --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] PATCH  /users/:pk                --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
+[GIN-debug] DELETE /users/:pk                --> github.com/TcMits/viewset.getHandler[...].func1 (3 handlers)
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
 [GIN-debug] Environment variable PORT is undefined. Using port :8080 by default

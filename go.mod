@@ -1,4 +1,4 @@
-module github.com/TcMits/gin-viewset
+module github.com/TcMits/viewset
 
 go 1.18
 
