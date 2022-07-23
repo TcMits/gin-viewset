@@ -24,13 +24,13 @@ func (_ *MockDeniedAny) Check(_ string, _ *gin.Context) error {
 }
 
 func (s *MockSerializerAlwaysError[EntityType]) Serialize(
-	_ *gin.H, _ *EntityType, _ *gin.Context,
+	_ *map[string]any, _ *EntityType, _ *gin.Context,
 ) error {
 	return errors.New("Serialize error")
 }
 
 func (s *MockSerializerAlwaysError[EntityType]) ManySerialize(
-	_ *[]gin.H, _ *[]*EntityType, _ *gin.Context,
+	_ *[]map[string]any, _ *[]*EntityType, _ *gin.Context,
 ) error {
 	return errors.New("Many serialize error")
 }
@@ -45,7 +45,7 @@ func (w *MockGinBodyResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func MockJsonPost(c *gin.Context, content interface{}) {
+func MockJsonPost(c *gin.Context, content any) {
 	c.Request.Method = "POST" // or PUT
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -60,7 +60,7 @@ func MockJsonPost(c *gin.Context, content interface{}) {
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(jsonbytes))
 }
 
-func MockJsonPut(c *gin.Context, content interface{}) {
+func MockJsonPut(c *gin.Context, content any) {
 	c.Request.Method = "PUT"
 	c.Request.Header.Set("Content-Type", "application/json")
 

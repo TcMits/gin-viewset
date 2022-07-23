@@ -12,25 +12,25 @@ import (
 
 func TestNewViewSet(t *testing.T) {
 	basePath := "/objects"
-	additionalActions := []Route[testObject, testObjectRequest]{}
+	additionalActions := []Route[testObject]{}
 	additionalActions = append(additionalActions,
-		Route[testObject, testObjectRequest]{
+		Route[testObject]{
 			Action:  "send",
 			SubPath: "/:pk/send",
 			Method:  http.MethodPut,
-			Handler: func(_ string, _ *ViewSet[testObject, testObjectRequest], _ *gin.Context) {
+			Handler: func(_ string, _ *ViewSet[testObject], _ *gin.Context) {
 			},
 		},
 	)
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, additionalActions, objectManager, nil, nil, nil, nil,
 	)
 
 	assert.Equal(t, basePath, viewSet.BasePath)
 	assert.Equal(t, 7, len(viewSet.Actions))
-	assert.Equal(t, objectManager, viewSet.ObjectManager)
+	assert.Equal(t, objectManager, viewSet.Manager)
 	assert.NotEqual(t, nil, viewSet.ExceptionHandler)
 	assert.NotEqual(t, nil, viewSet.PermissionChecker)
 	assert.NotEqual(t, nil, viewSet.Serializer)
@@ -43,7 +43,7 @@ func TestNewViewSetWithExcludeActions(t *testing.T) {
 	excludeActions = append(excludeActions, DEFAULT_UPDATE_ACTION)
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", excludeActions, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -55,7 +55,7 @@ func TestViewSetRegister(t *testing.T) {
 	basePath := "/objects"
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 	router := SetUpRouter()
@@ -69,15 +69,15 @@ func TestGetHandler(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	basePath := "/objects"
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 	callBack := ""
 
 	handler := getHandler(
 		"test",
-		viewSet,
-		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) { callBack = "test" },
+		*viewSet,
+		func(s string, vs *ViewSet[testObject], ctx *gin.Context) { callBack = "test" },
 	)
 
 	handler(c)
@@ -94,14 +94,14 @@ func TestGetHandlerWithPermissionError(t *testing.T) {
 	permissionChecker := &MockDeniedAny{}
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, permissionChecker, nil, nil,
 	)
 
 	handler := getHandler(
 		"test",
-		viewSet,
-		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) {},
+		*viewSet,
+		func(s string, vs *ViewSet[testObject], ctx *gin.Context) {},
 	)
 
 	handler(c)
@@ -123,7 +123,7 @@ func TestList(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -147,7 +147,7 @@ func TestListWithGetObjectsError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -172,7 +172,7 @@ func TestListWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -202,7 +202,7 @@ func TestRetrieve(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -232,7 +232,7 @@ func TestRetrieveWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -263,7 +263,7 @@ func TestRetrieveWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -283,7 +283,7 @@ func TestCreate(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPost(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 
@@ -292,7 +292,7 @@ func TestCreate(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -303,7 +303,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestCreateWithValidateError(t *testing.T) {
-	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	mockResponse := `{"message":"Key: 'testObject.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -312,7 +312,7 @@ func TestCreateWithValidateError(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test 2"})
+	MockJsonPost(c, map[string]any{"name": "test 2"})
 
 	basePath := "/objects"
 
@@ -321,7 +321,7 @@ func TestCreateWithValidateError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -341,7 +341,7 @@ func TestCreateWithSaveError(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPost(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 
@@ -350,7 +350,7 @@ func TestCreateWithSaveError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -370,7 +370,7 @@ func TestCreateWithSerializeError(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPost(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 	serializer := &MockSerializerAlwaysError[testObject]{}
@@ -380,7 +380,7 @@ func TestCreateWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -406,7 +406,7 @@ func TestUpdate(t *testing.T) {
 		},
 	}
 
-	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPut(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 
@@ -415,7 +415,7 @@ func TestUpdate(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -441,7 +441,7 @@ func TestUpdateWithGetObjectError(t *testing.T) {
 		},
 	}
 
-	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPut(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 
@@ -450,7 +450,7 @@ func TestUpdateWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -461,7 +461,7 @@ func TestUpdateWithGetObjectError(t *testing.T) {
 }
 
 func TestUpdateWithValidateError(t *testing.T) {
-	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	mockResponse := `{"message":"Key: 'testObject.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -476,7 +476,7 @@ func TestUpdateWithValidateError(t *testing.T) {
 		},
 	}
 
-	MockJsonPut(c, map[string]interface{}{"name": "test 2"})
+	MockJsonPut(c, map[string]any{"name": "test 2"})
 
 	basePath := "/objects"
 
@@ -485,7 +485,7 @@ func TestUpdateWithValidateError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -511,7 +511,7 @@ func TestUpdateWithSaveError(t *testing.T) {
 		},
 	}
 
-	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPut(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 
@@ -520,7 +520,7 @@ func TestUpdateWithSaveError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -546,7 +546,7 @@ func TestUpdateWithSerializeError(t *testing.T) {
 		},
 	}
 
-	MockJsonPut(c, map[string]interface{}{"name": "test 2", "age": 21})
+	MockJsonPut(c, map[string]any{"name": "test 2", "age": 21})
 
 	basePath := "/objects"
 	serializer := &MockSerializerAlwaysError[testObject]{}
@@ -556,7 +556,7 @@ func TestUpdateWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -590,7 +590,7 @@ func TestDelete(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -624,7 +624,7 @@ func TestDeleteWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -658,7 +658,7 @@ func TestDeleteWithDeleteError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObjectRequest](
+	viewSet := NewViewSet[testObject, testObject, testObject](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 

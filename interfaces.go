@@ -7,11 +7,11 @@ type Field[EntityType any] interface {
 }
 
 type SingleSerializer[EntityType any] interface {
-	Serialize(*gin.H, *EntityType, *gin.Context) error
+	Serialize(*map[string]any, *EntityType, *gin.Context) error
 }
 
 type ManySerializer[EntityType any] interface {
-	ManySerialize(*[]gin.H, *[]*EntityType, *gin.Context) error
+	ManySerialize(*[]map[string]any, *[]*EntityType, *gin.Context) error
 }
 
 type Serializer[EntityType any] interface {
@@ -20,14 +20,7 @@ type Serializer[EntityType any] interface {
 }
 
 type FormValidator[EntityType any, ValidatedType any] interface {
-	Validate(*ValidatedType, *EntityType, *gin.Context) error
-}
-
-type ObjectManager[EntityType any, ValidatedType any] interface {
-	GetObject(**EntityType, *gin.Context) error
-	GetObjects(*[]*EntityType, *gin.H, *gin.Context) error
-	Save(**EntityType, *ValidatedType, *gin.Context) error
-	Delete(**EntityType, *gin.Context) error
+	Validate(*map[string]any, *EntityType, *gin.Context) error
 }
 
 type PermissionChecker interface {
@@ -37,5 +30,5 @@ type PermissionChecker interface {
 
 type ExceptionHandler interface {
 	Handle(error, *gin.Context)
-	// use something like ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"Message": "Unauthorized"}) to abort request
+	// use something like ctx.AbortWithStatusJSON(http.StatusUnauthorized, map[string]any{"Message": "Unauthorized"}) to abort request
 }

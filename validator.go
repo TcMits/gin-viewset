@@ -1,13 +1,20 @@
 package viewset
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/mitchellh/mapstructure"
+)
 
 type DefaultValidator[EntityType any, ValidatedType any] struct{}
 
 func (_ *DefaultValidator[EntityType, ValidatedType]) Validate(
-	dest *ValidatedType, entity *EntityType, c *gin.Context,
+	dest *map[string]any, entity *EntityType, c *gin.Context,
 ) error {
-	if err := c.ShouldBind(&dest); err != nil {
+	validator := new(ValidatedType)
+	if err := c.ShouldBind(validator); err != nil {
+		return err
+	}
+	if err := mapstructure.Decode(validator, dest); err != nil {
 		return err
 	}
 	return nil

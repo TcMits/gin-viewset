@@ -17,15 +17,16 @@ func TestDefaultValidatorValidate(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test", "age": 1})
+	MockJsonPost(c, map[string]any{"name": "test", "age": 1})
 
-	validator := DefaultValidator[testObject, testObjectRequest]{}
-	result := testObjectRequest{}
+	validator := DefaultValidator[testObject, testObject]{}
+	result := map[string]any{}
 
-	validator.Validate(&result, nil, c)
+	err := validator.Validate(&result, nil, c)
 
-	assert.Equal(t, 1, result.Age)
-	assert.Equal(t, "test", result.Name)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, 1, result["age"].(int))
+	assert.Equal(t, "test", result["name"].(string))
 }
 
 func TestDefaultValidatorValidateWithError(t *testing.T) {
@@ -36,10 +37,10 @@ func TestDefaultValidatorValidateWithError(t *testing.T) {
 		Header: make(http.Header),
 	}
 
-	MockJsonPost(c, map[string]interface{}{"name": "test"})
+	MockJsonPost(c, map[string]any{"name": "test"})
 
-	validator := DefaultValidator[testObject, testObjectRequest]{}
-	result := testObjectRequest{}
+	validator := DefaultValidator[testObject, testObject]{}
+	result := map[string]any{}
 
 	err := validator.Validate(&result, nil, c)
 

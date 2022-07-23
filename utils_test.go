@@ -8,14 +8,9 @@ import (
 )
 
 type testObject struct {
-	Pk   int    `mapstructure:"-"`
-	Name string `mapstructure:"name"`
-	Age  int    `mapstructure:"age"`
-}
-
-type testObjectRequest struct {
-	Name string `json:"name" form:"name" binding:"required"`
-	Age  int    `json:"age" form:"age" binding:"required"`
+	Pk   int    `mapstructure:"-" uri:"pk"`
+	Name string `mapstructure:"name" json:"name" form:"name" binding:"required"`
+	Age  int    `mapstructure:"age" json:"age" form:"age" binding:"required"`
 }
 
 type testObjectManager struct {
@@ -34,13 +29,13 @@ func (tf testField) Serialize(object *testObject, c *gin.Context) (any, error) {
 
 func (om *testObjectManager) GetObjects(
 	dest *[]*testObject,
-	paginatedMeta *gin.H,
+	paginatedMeta *map[string]any,
 	c *gin.Context,
 ) error {
 	if om.RaiseError {
 		return errors.New("Get objects error")
 	}
-	(*paginatedMeta)["count"] = len(om.Database)
+	(*paginatedMeta) = map[string]any{"count": len(om.Database)}
 	for i := range om.Database {
 		*dest = append(*dest, &om.Database[i])
 	}
@@ -66,7 +61,7 @@ func (om *testObjectManager) GetObject(
 
 func (om *testObjectManager) Save(
 	dest **testObject,
-	validatedObject *testObjectRequest,
+	validatedData *map[string]any,
 	c *gin.Context,
 ) error {
 	if om.RaiseError {
@@ -76,15 +71,15 @@ func (om *testObjectManager) Save(
 		// create
 		newObject := testObject{
 			Pk:   len(om.Database) + 1,
-			Name: validatedObject.Name,
-			Age:  validatedObject.Age,
+			Name: (*validatedData)["name"].(string),
+			Age:  (*validatedData)["age"].(int),
 		}
 		om.Database = append(om.Database, newObject)
 		*dest = &newObject
 		return nil
 	}
-	(*dest).Name = validatedObject.Name
-	(*dest).Age = validatedObject.Age
+	(*dest).Name = (*validatedData)["name"].(string)
+	(*dest).Age = (*validatedData)["age"].(int)
 	return nil
 }
 

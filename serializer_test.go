@@ -17,7 +17,7 @@ func TestDefaultSerializerSerialize(t *testing.T) {
 		},
 	}
 	object := testObject{Name: "test", Age: 18}
-	result := gin.H{}
+	result := map[string]any{}
 
 	serializer.Serialize(&result, &object, c)
 
@@ -35,7 +35,7 @@ func TestDefaultSerializerSerializeWithError(t *testing.T) {
 		},
 	}
 	object := testObject{Name: "test", Age: 17}
-	result := gin.H{}
+	result := map[string]any{}
 
 	err := serializer.Serialize(&result, &object, c)
 
@@ -52,7 +52,7 @@ func TestDefaultSerializerManySerialize(t *testing.T) {
 	}
 	objects := []*testObject{}
 	objects = append(objects, &testObject{Name: "test", Age: 21}, &testObject{Name: "test 2", Age: 22})
-	results := []gin.H{}
+	results := []map[string]any{}
 
 	serializer.ManySerialize(&results, &objects, c)
 
@@ -75,7 +75,7 @@ func TestDefaultSerializerManySerializeWithError(t *testing.T) {
 	}
 	objects := []*testObject{}
 	objects = append(objects, &testObject{Name: "test", Age: 21}, &testObject{Name: "test 2", Age: 17})
-	results := []gin.H{}
+	results := []map[string]any{}
 
 	err := serializer.ManySerialize(&results, &objects, c)
 	assert.Equal(t, "Fail", err.Error())

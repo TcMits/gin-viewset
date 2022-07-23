@@ -3,6 +3,7 @@ package viewset
 import (
 	"net/http"
 
+	"github.com/TcMits/viewset/manager"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,44 +15,44 @@ const (
 	DEFAULT_DELETE_ACTION   = "delete"
 )
 
-type HandlerWithViewSetFunc[EntityType any, ValidatedType any] func(
+type HandlerWithViewSetFunc[EntityType any] func(
 	string,
-	*ViewSet[EntityType, ValidatedType],
+	*ViewSet[EntityType],
 	*gin.Context,
 )
 
-type Route[EntityType any, ValidatedType any] struct {
+type Route[EntityType any] struct {
 	Action  string
 	SubPath string
 	Method  string
-	Handler HandlerWithViewSetFunc[EntityType, ValidatedType]
+	Handler HandlerWithViewSetFunc[EntityType]
 }
 
-type ViewSet[EntityType any, ValidatedType any] struct {
+type ViewSet[EntityType any] struct {
 	BasePath string
-	Actions  []Route[EntityType, ValidatedType]
+	Actions  []Route[EntityType]
 
 	ExceptionHandler
 	PermissionChecker
-	ObjectManager ObjectManager[EntityType, ValidatedType]
+	Manager       manager.Manager[EntityType, any]
 	Serializer    Serializer[EntityType]
-	FormValidator FormValidator[EntityType, ValidatedType]
+	FormValidator FormValidator[EntityType, any]
 }
 
-func NewViewSet[EntityType any, ValidatedType any](
+func NewViewSet[EntityType any, ValidatedType any, URIType any](
 	basePath string,
 	detailParams string,
 	excludeDefaultActions []string,
-	additionalActions []Route[EntityType, ValidatedType],
+	additionalActions []Route[EntityType],
 
-	objectManager ObjectManager[EntityType, ValidatedType],
+	manager manager.Manager[EntityType, URIType],
 	exceptionHandler ExceptionHandler,
 	permissionChecker PermissionChecker,
 	serializer Serializer[EntityType],
 	formValidator FormValidator[EntityType, ValidatedType],
-) *ViewSet[EntityType, ValidatedType] {
-	if objectManager == nil {
-		panic("objectManager is required")
+) *ViewSet[EntityType] {
+	if manager == nil {
+		panic("manager is required")
 	}
 	if exceptionHandler == nil {
 		exceptionHandler = &DefaultExceptionHandler{}
@@ -66,75 +67,75 @@ func NewViewSet[EntityType any, ValidatedType any](
 		formValidator = &DefaultValidator[EntityType, ValidatedType]{}
 	}
 
-	viewSet := &ViewSet[EntityType, ValidatedType]{
+	viewSet := &ViewSet[EntityType]{
 		BasePath:          basePath,
 		ExceptionHandler:  exceptionHandler,
 		PermissionChecker: permissionChecker,
-		ObjectManager:     objectManager,
+		Manager:           manager,
 		Serializer:        serializer,
 		FormValidator:     formValidator,
 	}
 
 	if shouldAddAction(DEFAULT_LIST_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidatedType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
 			Action:  DEFAULT_LIST_ACTION,
 			SubPath: "/",
 			Method:  http.MethodGet,
-			Handler: List[EntityType, ValidatedType],
+			Handler: List[EntityType],
 		})
 	}
 	if shouldAddAction(DEFAULT_RETRIEVE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidatedType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
 			Action:  DEFAULT_RETRIEVE_ACTION,
 			SubPath: detailParams,
 			Method:  http.MethodGet,
-			Handler: Retrieve[EntityType, ValidatedType],
+			Handler: Retrieve[EntityType],
 		})
 	}
 	if shouldAddAction(DEFAULT_CREATE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidatedType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
 			Action:  DEFAULT_CREATE_ACTION,
 			SubPath: "/",
 			Method:  http.MethodPost,
-			Handler: Create[EntityType, ValidatedType],
+			Handler: Create[EntityType],
 		})
 	}
 	if shouldAddAction(DEFAULT_UPDATE_ACTION, excludeDefaultActions) {
 		viewSet.Actions = append(
 			viewSet.Actions,
-			Route[EntityType, ValidatedType]{
+			Route[EntityType]{
 				Action:  DEFAULT_UPDATE_ACTION,
 				SubPath: detailParams,
 				Method:  http.MethodPut,
-				Handler: Update[EntityType, ValidatedType],
-			}, Route[EntityType, ValidatedType]{
+				Handler: Update[EntityType],
+			}, Route[EntityType]{
 				Action:  DEFAULT_UPDATE_ACTION,
 				SubPath: detailParams,
 				Method:  http.MethodPatch,
-				Handler: Update[EntityType, ValidatedType],
+				Handler: Update[EntityType],
 			},
 		)
 	}
 	if shouldAddAction(DEFAULT_DELETE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidatedType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
 			Action:  DEFAULT_DELETE_ACTION,
 			SubPath: detailParams,
 			Method:  http.MethodDelete,
-			Handler: Delete[EntityType, ValidatedType],
+			Handler: Delete[EntityType],
 		})
 	}
 	viewSet.Actions = append(viewSet.Actions, additionalActions...)
 	return viewSet
 }
 
-func (viewSet *ViewSet[_, _]) Register(handler gin.IRouter) {
+func (viewSet *ViewSet[_]) Register(handler gin.IRouter) {
 	gr := handler.Group(viewSet.BasePath)
 	{
 		for _, route := range viewSet.Actions {
 			gr.Handle(
 				route.Method,
 				route.SubPath,
-				getHandler(route.Action, viewSet, route.Handler),
+				getHandler(route.Action, *viewSet, route.Handler),
 			)
 		}
 	}
@@ -149,10 +150,10 @@ func shouldAddAction(action string, excludeList []string) bool {
 	return true
 }
 
-func getHandler[EntityType any, ValidatedType any](
+func getHandler[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
-	function HandlerWithViewSetFunc[EntityType, ValidatedType],
+	viewSet ViewSet[EntityType], // copy viewset for each route
+	function HandlerWithViewSetFunc[EntityType],
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := viewSet.PermissionChecker.Check(action, c); err != nil {
@@ -161,20 +162,20 @@ func getHandler[EntityType any, ValidatedType any](
 			), c)
 			return
 		}
-		function(action, viewSet, c)
+		function(action, &viewSet, c)
 	}
 }
 
-func List[EntityType any, ValidatedType any](
+func List[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
+	viewSet *ViewSet[EntityType],
 	c *gin.Context,
 ) {
-	paginatedMeta := gin.H{}
+	paginatedMeta := new(map[string]any)
 	entities := make([]*EntityType, 0, 20)
-	manyResponse := make([]gin.H, 0, 20)
+	manyResponse := make([]map[string]any, 0, 20)
 
-	if err := viewSet.ObjectManager.GetObjects(&entities, &paginatedMeta, c); err != nil {
+	if err := viewSet.Manager.GetObjects(&entities, paginatedMeta, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusInternalServerError, err,
 		), c)
@@ -186,27 +187,27 @@ func List[EntityType any, ValidatedType any](
 		), c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, map[string]any{
 		"meta":    paginatedMeta,
 		"results": manyResponse,
 	})
 }
 
-func Retrieve[EntityType any, ValidatedType any](
+func Retrieve[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
+	viewSet *ViewSet[EntityType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)
-	response := gin.H{}
+	response := new(map[string]any)
 
-	if err := viewSet.ObjectManager.GetObject(&entity, c); err != nil {
+	if err := viewSet.Manager.GetObject(&entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusNotFound, err,
 		), c)
 		return
 	}
-	if err := viewSet.Serializer.Serialize(&response, entity, c); err != nil {
+	if err := viewSet.Serializer.Serialize(response, entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusInternalServerError, err,
 		), c)
@@ -215,28 +216,28 @@ func Retrieve[EntityType any, ValidatedType any](
 	c.JSON(http.StatusOK, response)
 }
 
-func Create[EntityType any, ValidatedType any](
+func Create[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
+	viewSet *ViewSet[EntityType],
 	c *gin.Context,
 ) {
 	var entity *EntityType // make nil
-	entityRequest := new(ValidatedType)
-	response := gin.H{}
+	validatedData := new(map[string]any)
+	response := new(map[string]any)
 
-	if err := viewSet.FormValidator.Validate(entityRequest, entity, c); err != nil {
+	if err := viewSet.FormValidator.Validate(validatedData, entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusBadRequest, err,
 		), c)
 		return
 	}
-	if err := viewSet.ObjectManager.Save(&entity, entityRequest, c); err != nil {
+	if err := viewSet.Manager.Save(&entity, validatedData, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusBadRequest, err,
 		), c)
 		return
 	}
-	if err := viewSet.Serializer.Serialize(&response, entity, c); err != nil {
+	if err := viewSet.Serializer.Serialize(response, entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusInternalServerError, err,
 		), c)
@@ -245,34 +246,34 @@ func Create[EntityType any, ValidatedType any](
 	c.JSON(http.StatusCreated, response)
 }
 
-func Update[EntityType any, ValidatedType any](
+func Update[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
+	viewSet *ViewSet[EntityType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)
-	entityRequest := new(ValidatedType)
-	response := gin.H{}
+	validatedData := new(map[string]any)
+	response := new(map[string]any)
 
-	if err := viewSet.ObjectManager.GetObject(&entity, c); err != nil {
+	if err := viewSet.Manager.GetObject(&entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusNotFound, err,
 		), c)
 		return
 	}
-	if err := viewSet.FormValidator.Validate(entityRequest, entity, c); err != nil {
+	if err := viewSet.FormValidator.Validate(validatedData, entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusBadRequest, err,
 		), c)
 		return
 	}
-	if err := viewSet.ObjectManager.Save(&entity, entityRequest, c); err != nil {
+	if err := viewSet.Manager.Save(&entity, validatedData, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusBadRequest, err,
 		), c)
 		return
 	}
-	if err := viewSet.Serializer.Serialize(&response, entity, c); err != nil {
+	if err := viewSet.Serializer.Serialize(response, entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusInternalServerError, err,
 		), c)
@@ -281,24 +282,24 @@ func Update[EntityType any, ValidatedType any](
 	c.JSON(http.StatusOK, response)
 }
 
-func Delete[EntityType any, ValidatedType any](
+func Delete[EntityType any](
 	action string,
-	viewSet *ViewSet[EntityType, ValidatedType],
+	viewSet *ViewSet[EntityType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)
 
-	if err := viewSet.ObjectManager.GetObject(&entity, c); err != nil {
+	if err := viewSet.Manager.GetObject(&entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusNotFound, err,
 		), c)
 		return
 	}
-	if err := viewSet.ObjectManager.Delete(&entity, c); err != nil {
+	if err := viewSet.Manager.Delete(&entity, c); err != nil {
 		viewSet.ExceptionHandler.Handle(NewViewSetError(
 			err.Error(), http.StatusBadRequest, err,
 		), c)
 		return
 	}
-	c.JSON(http.StatusNoContent, gin.H{})
+	c.JSON(http.StatusNoContent, map[string]any{})
 }

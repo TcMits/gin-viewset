@@ -35,21 +35,21 @@ func (h *DefaultExceptionHandler) Handle(err error, c *gin.Context) {
 	case *ViewSetError:
 		c.AbortWithStatusJSON(
 			foundedErr.StatusCode,
-			gin.H{
+			map[string]any{
 				"message": foundedErr.Error(),
 			},
 		)
 	case ViewSetError:
 		c.AbortWithStatusJSON(
 			foundedErr.StatusCode,
-			gin.H{
+			map[string]any{
 				"message": foundedErr.Error(),
 			},
 		)
 	default:
 		c.AbortWithStatusJSON(
 			http.StatusBadRequest,
-			gin.H{
+			map[string]any{
 				"message": foundedErr.Error(),
 			},
 		)

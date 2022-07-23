@@ -10,7 +10,7 @@ type DefaultSerializer[EntityType any] struct {
 }
 
 func (s *DefaultSerializer[EntityType]) Serialize(
-	dest *gin.H, entity *EntityType, c *gin.Context,
+	dest *map[string]any, entity *EntityType, c *gin.Context,
 ) error {
 	if err := mapstructure.Decode(entity, dest); err != nil {
 		return err
@@ -27,10 +27,10 @@ func (s *DefaultSerializer[EntityType]) Serialize(
 }
 
 func (s *DefaultSerializer[EntityType]) ManySerialize(
-	dest *[]gin.H, entities *[]*EntityType, c *gin.Context,
+	dest *[]map[string]any, entities *[]*EntityType, c *gin.Context,
 ) error {
 	for _, entity := range *entities {
-		var destObject gin.H
+		var destObject map[string]any
 		err := s.Serialize(&destObject, entity, c)
 		if err != nil {
 			return err
