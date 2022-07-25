@@ -19,14 +19,14 @@ func TestDefaultValidatorValidate(t *testing.T) {
 
 	MockJsonPost(c, map[string]any{"name": "test", "age": 1})
 
-	validator := DefaultValidator[testObject, testObject]{}
-	result := map[string]any{}
+	validator := DefaultValidator[testObject, testObjectRequest]{}
+	result := testObjectRequest{}
 
 	err := validator.Validate(&result, nil, c)
 
 	assert.Equal(t, err, nil)
-	assert.Equal(t, 1, result["age"].(int))
-	assert.Equal(t, "test", result["name"].(string))
+	assert.Equal(t, 1, result.Age)
+	assert.Equal(t, "test", result.Name)
 }
 
 func TestDefaultValidatorValidateWithError(t *testing.T) {
@@ -39,8 +39,8 @@ func TestDefaultValidatorValidateWithError(t *testing.T) {
 
 	MockJsonPost(c, map[string]any{"name": "test"})
 
-	validator := DefaultValidator[testObject, testObject]{}
-	result := map[string]any{}
+	validator := DefaultValidator[testObject, testObjectRequest]{}
+	result := testObjectRequest{}
 
 	err := validator.Validate(&result, nil, c)
 

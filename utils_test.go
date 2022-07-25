@@ -2,15 +2,23 @@ package viewset
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 type testObject struct {
-	Pk   int    `mapstructure:"-" uri:"pk"`
-	Name string `mapstructure:"name" json:"name" form:"name" binding:"required"`
-	Age  int    `mapstructure:"age" json:"age" form:"age" binding:"required"`
+	Pk   int    `mapstructure:"-"`
+	Name string `mapstructure:"name"`
+	Age  int    `mapstructure:"age"`
+}
+
+type testObjectRequest struct {
+	Name string `json:"name" form:"name" binding:"required"`
+	Age  int    `json:"age" form:"age" binding:"required"`
+}
+
+type testObjectURI struct {
+	Pk int `uri:"pk"`
 }
 
 type testObjectManager struct {
@@ -46,10 +54,11 @@ func (om *testObjectManager) GetObject(
 	dest **testObject,
 	c *gin.Context,
 ) error {
-	pk, err := strconv.Atoi(c.Param("pk"))
-	if err != nil {
-		return errors.New("Object not found")
+	uri := new(testObjectURI)
+	if err := c.ShouldBindUri(uri); err != nil {
+		return err
 	}
+	pk := uri.Pk
 	for i, object := range om.Database {
 		if object.Pk == pk {
 			*dest = &om.Database[i]
@@ -61,7 +70,7 @@ func (om *testObjectManager) GetObject(
 
 func (om *testObjectManager) Save(
 	dest **testObject,
-	validatedData *map[string]any,
+	validatedData *testObjectRequest,
 	c *gin.Context,
 ) error {
 	if om.RaiseError {
@@ -71,15 +80,15 @@ func (om *testObjectManager) Save(
 		// create
 		newObject := testObject{
 			Pk:   len(om.Database) + 1,
-			Name: (*validatedData)["name"].(string),
-			Age:  (*validatedData)["age"].(int),
+			Name: validatedData.Name,
+			Age:  validatedData.Age,
 		}
 		om.Database = append(om.Database, newObject)
 		*dest = &newObject
 		return nil
 	}
-	(*dest).Name = (*validatedData)["name"].(string)
-	(*dest).Age = (*validatedData)["age"].(int)
+	(*dest).Name = validatedData.Name
+	(*dest).Age = validatedData.Age
 	return nil
 }
 

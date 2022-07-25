@@ -9,51 +9,51 @@ import (
 	"gorm.io/gorm"
 )
 
-type ScopeGenerator func(c *gin.Context) func(*gorm.DB) *gorm.DB
-type PaginateFunc[EntityType any] func(*[]*EntityType, *map[string]any, *gorm.DB, *gin.Context) error
-type CreateFunc[EntityType any] func(**EntityType, *map[string]any, *gorm.DB, *gin.Context) error
-type UpdateFunc[EntityType any] func(**EntityType, *map[string]any, *gorm.DB, *gin.Context) error
-type DeleteFunc[EntityType any] func(**EntityType, *gorm.DB, *gin.Context) error
+type GormScopeGenerator func(c *gin.Context) func(*gorm.DB) *gorm.DB
+type GormPaginateFunc[EntityType any] func(*[]*EntityType, *map[string]any, *gorm.DB, *gin.Context) error
+type GormCreateFunc[EntityType, ValidateType any] func(**EntityType, *ValidateType, *gorm.DB, *gin.Context) error
+type GormUpdateFunc[EntityType, ValidateType any] func(**EntityType, *ValidateType, *gorm.DB, *gin.Context) error
+type GormDeleteFunc[EntityType, ValidateType any] func(**EntityType, *gorm.DB, *gin.Context) error
 
-type LimitOffsetPaginator struct {
+type GormLimitOffsetPaginator struct {
 	Offset    uint `form:"offset"`
 	Limit     uint `form:"limit"`
 	WithCount bool `form:"withCount"`
 }
 
-type GormManager[EntityType any, URIType any] struct {
+type GormManager[EntityType any, ValidateType, URIType any] struct {
 	db                *gorm.DB
-	scopeGenerators   []ScopeGenerator
-	paginateFunc      PaginateFunc[EntityType]
-	performCreateFunc CreateFunc[EntityType]
-	performUpdateFunc UpdateFunc[EntityType]
-	performDeleteFunc DeleteFunc[EntityType]
+	scopeGenerators   []GormScopeGenerator
+	paginateFunc      GormPaginateFunc[EntityType]
+	performCreateFunc GormCreateFunc[EntityType, ValidateType]
+	performUpdateFunc GormUpdateFunc[EntityType, ValidateType]
+	performDeleteFunc GormDeleteFunc[EntityType, ValidateType]
 	ginContextKey     string
 }
 
-func NewGormManager[EntityType any, URIType any](
+func NewGormManager[EntityType, ValidateType, URIType any](
 	db *gorm.DB,
-	paginateFunc PaginateFunc[EntityType],
-	performCreateFunc CreateFunc[EntityType],
-	performUpdateFunc UpdateFunc[EntityType],
-	performDeleteFunc DeleteFunc[EntityType],
+	paginateFunc GormPaginateFunc[EntityType],
+	performCreateFunc GormCreateFunc[EntityType, ValidateType],
+	performUpdateFunc GormUpdateFunc[EntityType, ValidateType],
+	performDeleteFunc GormDeleteFunc[EntityType, ValidateType],
 	ginContextKey string,
-	scopeGenerators ...ScopeGenerator,
-) *GormManager[EntityType, URIType] {
+	scopeGenerators ...GormScopeGenerator,
+) *GormManager[EntityType, ValidateType, URIType] {
 	if paginateFunc == nil {
-		paginateFunc = DefaultPaginateFunc[EntityType]
+		paginateFunc = DefaultGormPaginateFunc[EntityType]
 	}
 	if performCreateFunc == nil {
-		performCreateFunc = DefaultCreateFunc[EntityType]
+		performCreateFunc = DefaultGormCreateFunc[EntityType, ValidateType]
 	}
 	if performUpdateFunc == nil {
-		performUpdateFunc = DefaultUpdateFunc[EntityType]
+		performUpdateFunc = DefaultGormUpdateFunc[EntityType, ValidateType]
 	}
 	if performDeleteFunc == nil {
-		performDeleteFunc = DefaultDeleteFunc[EntityType]
+		performDeleteFunc = DefaultGormDeleteFunc[EntityType, ValidateType]
 	}
 
-	return &GormManager[EntityType, URIType]{
+	return &GormManager[EntityType, ValidateType, URIType]{
 		db:                db,
 		paginateFunc:      paginateFunc,
 		scopeGenerators:   scopeGenerators,
@@ -64,13 +64,13 @@ func NewGormManager[EntityType any, URIType any](
 	}
 }
 
-func (manager *GormManager[_, _]) newDBWithContext(c *gin.Context) *gorm.DB {
+func (manager *GormManager[_, _, _]) newDBWithContext(c *gin.Context) *gorm.DB {
 	newDB := manager.db.WithContext(c)
 	c.Set(manager.ginContextKey, newDB)
 	return newDB
 }
 
-func (manager *GormManager[_, _]) GetDBWithContext(c *gin.Context) *gorm.DB {
+func (manager *GormManager[_, _, _]) GetDBWithContext(c *gin.Context) *gorm.DB {
 	db, ok := c.Get(manager.ginContextKey)
 	if !ok {
 		return manager.newDBWithContext(c)
@@ -82,7 +82,7 @@ func (manager *GormManager[_, _]) GetDBWithContext(c *gin.Context) *gorm.DB {
 	return newDB
 }
 
-func (manager *GormManager[_, _]) GetQuerySet(c *gin.Context) *gorm.DB {
+func (manager *GormManager[_, _, _]) GetQuerySet(c *gin.Context) *gorm.DB {
 	lenGen := len(manager.scopeGenerators)
 	scopeFunctions := make([]func(*gorm.DB) *gorm.DB, 0, lenGen)
 	for _, gen := range manager.scopeGenerators {
@@ -91,32 +91,27 @@ func (manager *GormManager[_, _]) GetQuerySet(c *gin.Context) *gorm.DB {
 	return manager.GetDBWithContext(c).Scopes(scopeFunctions...)
 }
 
-func (manager *GormManager[EntityType, _]) GetObjects(
+func (manager *GormManager[EntityType, _, _]) GetObjects(
 	dest *[]*EntityType, paginatedMeta *map[string]any, c *gin.Context) error {
 	db := manager.GetQuerySet(c)
 	return manager.paginateFunc(dest, paginatedMeta, db, c)
 }
 
-func (manager *GormManager[EntityType, URIType]) GetObject(
+func (manager *GormManager[EntityType, _, URIType]) GetObject(
 	dest **EntityType, c *gin.Context) error {
 	*dest = new(EntityType)
 	paramsValidator := new(URIType)
-	filterKwargs := map[string]any{}
 	if err := c.ShouldBindUri(paramsValidator); err != nil {
 		return err
 	}
-	if err := mapstructure.Decode(paramsValidator, &filterKwargs); err != nil {
-		return err
-	}
-	result := manager.GetQuerySet(c).First(*dest, filterKwargs)
-	if err := result.Error; err != nil {
+	if err := manager.GetQuerySet(c).First(*dest, paramsValidator).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
-func (manager *GormManager[EntityType, _]) Save(
-	dest **EntityType, validatedData *map[string]any, c *gin.Context) error {
+func (manager *GormManager[EntityType, ValidateType, _]) Save(
+	dest **EntityType, validatedData *ValidateType, c *gin.Context) error {
 	db := manager.GetDBWithContext(c)
 	if *dest == nil {
 		return manager.performCreateFunc(dest, validatedData, db, c)
@@ -124,17 +119,17 @@ func (manager *GormManager[EntityType, _]) Save(
 	return manager.performUpdateFunc(dest, validatedData, db, c)
 }
 
-func (manager *GormManager[EntityType, _]) Delete(
+func (manager *GormManager[EntityType, _, _]) Delete(
 	dest **EntityType, c *gin.Context) error {
 	db := manager.GetDBWithContext(c)
 	return manager.performDeleteFunc(dest, db, c)
 }
 
-func DefaultPaginateFunc[EntityType any](
+func DefaultGormPaginateFunc[EntityType any](
 	dest *[]*EntityType, paginatedMeta *map[string]any, db *gorm.DB, c *gin.Context) error {
 	// NOTE: using limit offset
 	counter := 0
-	paginator := LimitOffsetPaginator{Limit: 20}
+	paginator := GormLimitOffsetPaginator{Limit: 20}
 	*paginatedMeta = map[string]any{}
 
 	if err := c.ShouldBindQuery(&paginator); err != nil {
@@ -192,7 +187,7 @@ func DefaultPaginateFunc[EntityType any](
 	return nil
 }
 
-func DefaultCreateFunc[EntityType any](dest **EntityType, validatedData *map[string]any, db *gorm.DB, _ *gin.Context) error {
+func DefaultGormCreateFunc[EntityType, ValidateType any](dest **EntityType, validatedData *ValidateType, db *gorm.DB, _ *gin.Context) error {
 	// NOTE: When creating from map, hooks won’t be invoked, associations won’t be saved and primary key values won’t be back filled
 	*dest = new(EntityType)
 	if err := mapstructure.Decode(validatedData, *dest); err != nil {
@@ -204,14 +199,18 @@ func DefaultCreateFunc[EntityType any](dest **EntityType, validatedData *map[str
 	return nil
 }
 
-func DefaultUpdateFunc[EntityType any](dest **EntityType, validatedData *map[string]any, db *gorm.DB, _ *gin.Context) error {
-	if err := db.Model(*dest).Updates(validatedData).Error; err != nil {
+func DefaultGormUpdateFunc[EntityType, ValidateType any](dest **EntityType, validatedData *ValidateType, db *gorm.DB, _ *gin.Context) error {
+	mapValidatedData := new(map[string]any)
+	if err := mapstructure.Decode(validatedData, mapValidatedData); err != nil {
+		return err
+	}
+	if err := db.Model(*dest).Updates(mapValidatedData).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
-func DefaultDeleteFunc[EntityType any](dest **EntityType, db *gorm.DB, _ *gin.Context) error {
+func DefaultGormDeleteFunc[EntityType, ValidateType any](dest **EntityType, db *gorm.DB, _ *gin.Context) error {
 	if err := db.Delete(*dest).Error; err != nil {
 		return err
 	}

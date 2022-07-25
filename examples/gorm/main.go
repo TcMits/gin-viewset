@@ -31,10 +31,10 @@ func main() {
 	}
 	db.AutoMigrate(&Book{})
 
-	bookManager := manager.NewGormManager[Book, BookURI](
+	bookManager := manager.NewGormManager[Book, BookRequest, BookURI](
 		db.Model(&Book{}), nil, nil, nil, nil, "db",
 	)
-	bookViewSet := viewset.NewViewSet[Book, BookRequest, BookURI](
+	bookViewSet := viewset.NewViewSet[Book, BookRequest](
 		"/books", "/:pk", nil, nil, bookManager, nil, nil, nil, nil,
 	)
 	bookViewSet.Register(r)

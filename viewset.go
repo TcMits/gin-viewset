@@ -15,42 +15,42 @@ const (
 	DEFAULT_DELETE_ACTION   = "delete"
 )
 
-type HandlerWithViewSetFunc[EntityType any] func(
+type HandlerWithViewSetFunc[EntityType, ValidateType any] func(
 	string,
-	*ViewSet[EntityType],
+	*ViewSet[EntityType, ValidateType],
 	*gin.Context,
 )
 
-type Route[EntityType any] struct {
+type Route[EntityType, ValidateType any] struct {
 	Action  string
 	SubPath string
 	Method  string
-	Handler HandlerWithViewSetFunc[EntityType]
+	Handler HandlerWithViewSetFunc[EntityType, ValidateType]
 }
 
-type ViewSet[EntityType any] struct {
+type ViewSet[EntityType, ValidateType any] struct {
 	BasePath string
-	Actions  []Route[EntityType]
+	Actions  []Route[EntityType, ValidateType]
 
 	ExceptionHandler
 	PermissionChecker
-	Manager       manager.Manager[EntityType, any]
+	Manager       manager.Manager[EntityType, ValidateType]
 	Serializer    Serializer[EntityType]
-	FormValidator FormValidator[EntityType, any]
+	FormValidator FormValidator[EntityType, ValidateType]
 }
 
-func NewViewSet[EntityType any, ValidatedType any, URIType any](
+func NewViewSet[EntityType, ValidateType any](
 	basePath string,
 	detailParams string,
 	excludeDefaultActions []string,
-	additionalActions []Route[EntityType],
+	additionalActions []Route[EntityType, ValidateType],
 
-	manager manager.Manager[EntityType, URIType],
+	manager manager.Manager[EntityType, ValidateType],
 	exceptionHandler ExceptionHandler,
 	permissionChecker PermissionChecker,
 	serializer Serializer[EntityType],
-	formValidator FormValidator[EntityType, ValidatedType],
-) *ViewSet[EntityType] {
+	formValidator FormValidator[EntityType, ValidateType],
+) *ViewSet[EntityType, ValidateType] {
 	if manager == nil {
 		panic("manager is required")
 	}
@@ -64,10 +64,10 @@ func NewViewSet[EntityType any, ValidatedType any, URIType any](
 		serializer = &DefaultSerializer[EntityType]{}
 	}
 	if formValidator == nil {
-		formValidator = &DefaultValidator[EntityType, ValidatedType]{}
+		formValidator = &DefaultValidator[EntityType, ValidateType]{}
 	}
 
-	viewSet := &ViewSet[EntityType]{
+	viewSet := &ViewSet[EntityType, ValidateType]{
 		BasePath:          basePath,
 		ExceptionHandler:  exceptionHandler,
 		PermissionChecker: permissionChecker,
@@ -77,58 +77,58 @@ func NewViewSet[EntityType any, ValidatedType any, URIType any](
 	}
 
 	if shouldAddAction(DEFAULT_LIST_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidateType]{
 			Action:  DEFAULT_LIST_ACTION,
 			SubPath: "/",
 			Method:  http.MethodGet,
-			Handler: List[EntityType],
+			Handler: List[EntityType, ValidateType],
 		})
 	}
 	if shouldAddAction(DEFAULT_RETRIEVE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidateType]{
 			Action:  DEFAULT_RETRIEVE_ACTION,
 			SubPath: detailParams,
 			Method:  http.MethodGet,
-			Handler: Retrieve[EntityType],
+			Handler: Retrieve[EntityType, ValidateType],
 		})
 	}
 	if shouldAddAction(DEFAULT_CREATE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidateType]{
 			Action:  DEFAULT_CREATE_ACTION,
 			SubPath: "/",
 			Method:  http.MethodPost,
-			Handler: Create[EntityType],
+			Handler: Create[EntityType, ValidateType],
 		})
 	}
 	if shouldAddAction(DEFAULT_UPDATE_ACTION, excludeDefaultActions) {
 		viewSet.Actions = append(
 			viewSet.Actions,
-			Route[EntityType]{
+			Route[EntityType, ValidateType]{
 				Action:  DEFAULT_UPDATE_ACTION,
 				SubPath: detailParams,
 				Method:  http.MethodPut,
-				Handler: Update[EntityType],
-			}, Route[EntityType]{
+				Handler: Update[EntityType, ValidateType],
+			}, Route[EntityType, ValidateType]{
 				Action:  DEFAULT_UPDATE_ACTION,
 				SubPath: detailParams,
 				Method:  http.MethodPatch,
-				Handler: Update[EntityType],
+				Handler: Update[EntityType, ValidateType],
 			},
 		)
 	}
 	if shouldAddAction(DEFAULT_DELETE_ACTION, excludeDefaultActions) {
-		viewSet.Actions = append(viewSet.Actions, Route[EntityType]{
+		viewSet.Actions = append(viewSet.Actions, Route[EntityType, ValidateType]{
 			Action:  DEFAULT_DELETE_ACTION,
 			SubPath: detailParams,
 			Method:  http.MethodDelete,
-			Handler: Delete[EntityType],
+			Handler: Delete[EntityType, ValidateType],
 		})
 	}
 	viewSet.Actions = append(viewSet.Actions, additionalActions...)
 	return viewSet
 }
 
-func (viewSet *ViewSet[_]) Register(handler gin.IRouter) {
+func (viewSet *ViewSet[_, _]) Register(handler gin.IRouter) {
 	gr := handler.Group(viewSet.BasePath)
 	{
 		for _, route := range viewSet.Actions {
@@ -150,10 +150,10 @@ func shouldAddAction(action string, excludeList []string) bool {
 	return true
 }
 
-func getHandler[EntityType any](
+func getHandler[EntityType, ValidateType any](
 	action string,
-	viewSet ViewSet[EntityType], // copy viewset for each route
-	function HandlerWithViewSetFunc[EntityType],
+	viewSet ViewSet[EntityType, ValidateType], // copy viewset for each route
+	function HandlerWithViewSetFunc[EntityType, ValidateType],
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := viewSet.PermissionChecker.Check(action, c); err != nil {
@@ -166,9 +166,9 @@ func getHandler[EntityType any](
 	}
 }
 
-func List[EntityType any](
+func List[EntityType, ValidateType any](
 	action string,
-	viewSet *ViewSet[EntityType],
+	viewSet *ViewSet[EntityType, ValidateType],
 	c *gin.Context,
 ) {
 	paginatedMeta := new(map[string]any)
@@ -193,9 +193,9 @@ func List[EntityType any](
 	})
 }
 
-func Retrieve[EntityType any](
+func Retrieve[EntityType, ValidateType any](
 	action string,
-	viewSet *ViewSet[EntityType],
+	viewSet *ViewSet[EntityType, ValidateType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)
@@ -216,13 +216,13 @@ func Retrieve[EntityType any](
 	c.JSON(http.StatusOK, response)
 }
 
-func Create[EntityType any](
+func Create[EntityType, ValidateType any](
 	action string,
-	viewSet *ViewSet[EntityType],
+	viewSet *ViewSet[EntityType, ValidateType],
 	c *gin.Context,
 ) {
 	var entity *EntityType // make nil
-	validatedData := new(map[string]any)
+	validatedData := new(ValidateType)
 	response := new(map[string]any)
 
 	if err := viewSet.FormValidator.Validate(validatedData, entity, c); err != nil {
@@ -246,13 +246,13 @@ func Create[EntityType any](
 	c.JSON(http.StatusCreated, response)
 }
 
-func Update[EntityType any](
+func Update[EntityType, ValidateType any](
 	action string,
-	viewSet *ViewSet[EntityType],
+	viewSet *ViewSet[EntityType, ValidateType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)
-	validatedData := new(map[string]any)
+	validatedData := new(ValidateType)
 	response := new(map[string]any)
 
 	if err := viewSet.Manager.GetObject(&entity, c); err != nil {
@@ -282,9 +282,9 @@ func Update[EntityType any](
 	c.JSON(http.StatusOK, response)
 }
 
-func Delete[EntityType any](
+func Delete[EntityType, ValidateType any](
 	action string,
-	viewSet *ViewSet[EntityType],
+	viewSet *ViewSet[EntityType, ValidateType],
 	c *gin.Context,
 ) {
 	entity := new(EntityType)

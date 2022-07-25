@@ -12,19 +12,19 @@ import (
 
 func TestNewViewSet(t *testing.T) {
 	basePath := "/objects"
-	additionalActions := []Route[testObject]{}
+	additionalActions := []Route[testObject, testObjectRequest]{}
 	additionalActions = append(additionalActions,
-		Route[testObject]{
+		Route[testObject, testObjectRequest]{
 			Action:  "send",
 			SubPath: "/:pk/send",
 			Method:  http.MethodPut,
-			Handler: func(_ string, _ *ViewSet[testObject], _ *gin.Context) {
+			Handler: func(_ string, _ *ViewSet[testObject, testObjectRequest], _ *gin.Context) {
 			},
 		},
 	)
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, additionalActions, objectManager, nil, nil, nil, nil,
 	)
 
@@ -43,7 +43,7 @@ func TestNewViewSetWithExcludeActions(t *testing.T) {
 	excludeActions = append(excludeActions, DEFAULT_UPDATE_ACTION)
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", excludeActions, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -55,7 +55,7 @@ func TestViewSetRegister(t *testing.T) {
 	basePath := "/objects"
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 	router := SetUpRouter()
@@ -69,7 +69,7 @@ func TestGetHandler(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	basePath := "/objects"
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 	callBack := ""
@@ -77,7 +77,9 @@ func TestGetHandler(t *testing.T) {
 	handler := getHandler(
 		"test",
 		*viewSet,
-		func(s string, vs *ViewSet[testObject], ctx *gin.Context) { callBack = "test" },
+		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) {
+			callBack = "test"
+		},
 	)
 
 	handler(c)
@@ -94,14 +96,14 @@ func TestGetHandlerWithPermissionError(t *testing.T) {
 	permissionChecker := &MockDeniedAny{}
 
 	objectManager := &testObjectManager{}
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, permissionChecker, nil, nil,
 	)
 
 	handler := getHandler(
 		"test",
 		*viewSet,
-		func(s string, vs *ViewSet[testObject], ctx *gin.Context) {},
+		func(s string, vs *ViewSet[testObject, testObjectRequest], ctx *gin.Context) {},
 	)
 
 	handler(c)
@@ -123,7 +125,7 @@ func TestList(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -147,7 +149,7 @@ func TestListWithGetObjectsError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -172,7 +174,7 @@ func TestListWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -202,7 +204,7 @@ func TestRetrieve(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -232,7 +234,7 @@ func TestRetrieveWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -263,7 +265,7 @@ func TestRetrieveWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -292,7 +294,7 @@ func TestCreate(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -303,7 +305,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestCreateWithValidateError(t *testing.T) {
-	mockResponse := `{"message":"Key: 'testObject.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -321,7 +323,7 @@ func TestCreateWithValidateError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -350,7 +352,7 @@ func TestCreateWithSaveError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -380,7 +382,7 @@ func TestCreateWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -415,7 +417,7 @@ func TestUpdate(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -450,7 +452,7 @@ func TestUpdateWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -461,7 +463,7 @@ func TestUpdateWithGetObjectError(t *testing.T) {
 }
 
 func TestUpdateWithValidateError(t *testing.T) {
-	mockResponse := `{"message":"Key: 'testObject.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
+	mockResponse := `{"message":"Key: 'testObjectRequest.Age' Error:Field validation for 'Age' failed on the 'required' tag"}`
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	blw := &MockGinBodyResponseWriter{MockBody: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -485,7 +487,7 @@ func TestUpdateWithValidateError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -520,7 +522,7 @@ func TestUpdateWithSaveError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -556,7 +558,7 @@ func TestUpdateWithSerializeError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, serializer, nil,
 	)
 
@@ -590,7 +592,7 @@ func TestDelete(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -624,7 +626,7 @@ func TestDeleteWithGetObjectError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 
@@ -658,7 +660,7 @@ func TestDeleteWithDeleteError(t *testing.T) {
 		objectManager.Database,
 		testObject{Pk: 1, Name: "test", Age: 20},
 	)
-	viewSet := NewViewSet[testObject, testObject, testObject](
+	viewSet := NewViewSet[testObject, testObjectRequest](
 		basePath, "/:pk", nil, nil, objectManager, nil, nil, nil, nil,
 	)
 

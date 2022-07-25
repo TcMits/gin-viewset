@@ -22,6 +22,10 @@ type person struct {
 	Name string `mapstructure:"name"`
 }
 
+type personRequest struct {
+	Name string `mapstructure:"name"`
+}
+
 func (person) TableName() string {
 	return "person"
 }
@@ -68,7 +72,7 @@ func (s *dbSuite) TearDownTest() {
 }
 
 func (s *dbSuite) TestNewGormManager() {
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db", func(c *gin.Context) func(*gorm.DB) *gorm.DB {
 			return func(d *gorm.DB) *gorm.DB { return d }
 		},
@@ -87,7 +91,7 @@ func (s *dbSuite) TestGormManagerNewDBWithContext() {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db",
 	)
 
@@ -102,7 +106,7 @@ func (s *dbSuite) TestGormManagerGetDBWithContext() {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db",
 	)
 
@@ -117,7 +121,7 @@ func (s *dbSuite) TestGormManagerGetDBWithContextExistDB() {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db",
 	)
 
@@ -134,7 +138,7 @@ func (s *dbSuite) TestGormManagerGetDBWithContextExistNil() {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db",
 	)
 
@@ -151,7 +155,7 @@ func (s *dbSuite) TestGormManagerGetQuerySet() {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	callBack := ""
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB, nil, nil, nil, nil, "db", func(c *gin.Context) func(*gorm.DB) *gorm.DB {
 			callBack = "test"
 			return func(d *gorm.DB) *gorm.DB {
@@ -175,7 +179,7 @@ func (s *dbSuite) TestDefaultPaginateFunc() {
 	person1 := person{1, "phuc"}
 	person2 := person{2, "huy"}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -218,7 +222,7 @@ func (s *dbSuite) TestDefaultPaginateFuncWithBindError() {
 		URL:    mockURL,
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -241,7 +245,7 @@ func (s *dbSuite) TestDefaultPaginateFuncWithPrevious() {
 	}
 	personIns := person{2, "huy"}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -277,7 +281,7 @@ func (s *dbSuite) TestDefaultPaginateFuncWithLargeLimit() {
 	}
 	personIns := person{2, "huy"}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -313,7 +317,7 @@ func (s *dbSuite) TestDefaultPaginateFuncWithoutLimit() {
 	}
 	personIns := person{2, "huy"}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -355,12 +359,12 @@ func (s *dbSuite) TestGormManagerGetObject() {
 	}
 	personIns := person{1, "phuc"}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
 	s.mock.ExpectQuery(regexp.QuoteMeta(
-		`SELECT * FROM "person" WHERE "id" = $1 ORDER BY "person"."id" LIMIT 1`),
+		`SELECT * FROM "person" WHERE "person"."id" = $1 ORDER BY "person"."id" LIMIT 1`),
 	).WithArgs(1).WillReturnRows(
 		sqlmock.NewRows([]string{"id", "name"}).AddRow(
 			personIns.ID, personIns.Name,
@@ -392,7 +396,7 @@ func (s *dbSuite) TestGormManagerGetObjectWithBindingError() {
 		},
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -418,12 +422,12 @@ func (s *dbSuite) TestGormManagerGetObjectWithFirstError() {
 		},
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
 	s.mock.ExpectQuery(regexp.QuoteMeta(
-		`SELECT * FROM "person" WHERE "id" = $1 ORDER BY "person"."id" LIMIT 1`),
+		`SELECT * FROM "person" WHERE "person"."id" = $1 ORDER BY "person"."id" LIMIT 1`),
 	).WithArgs(2).WillReturnRows(
 		sqlmock.NewRows([]string{"id", "name"}),
 	)
@@ -445,7 +449,7 @@ func (s *dbSuite) TestGormManagerDefaultCreateFunc() {
 		URL:    mockURL,
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -456,7 +460,7 @@ func (s *dbSuite) TestGormManagerDefaultCreateFunc() {
 	)
 
 	var entity *person
-	validatedData := map[string]any{"name": "phuc"}
+	validatedData := personRequest{Name: "phuc"}
 
 	err := gormManager.Save(&entity, &validatedData, c)
 
@@ -475,7 +479,7 @@ func (s *dbSuite) TestGormManagerDefaultUpdateFunc() {
 		URL:    mockURL,
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 
@@ -488,7 +492,7 @@ func (s *dbSuite) TestGormManagerDefaultUpdateFunc() {
 	)
 
 	entity := &person{ID: 1, Name: "phuc"}
-	validatedData := map[string]any{"name": "phuc 2"}
+	validatedData := personRequest{Name: "phuc 2"}
 
 	err := gormManager.Save(&entity, &validatedData, c)
 
@@ -507,7 +511,7 @@ func (s *dbSuite) TestGormManagerDefaultDeleteFunc() {
 		URL:    mockURL,
 	}
 
-	gormManager := NewGormManager[person, personURI](
+	gormManager := NewGormManager[person, personRequest, personURI](
 		s.DB.Model(&person{}), nil, nil, nil, nil, "db",
 	)
 

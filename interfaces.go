@@ -19,8 +19,8 @@ type Serializer[EntityType any] interface {
 	ManySerializer[EntityType]
 }
 
-type FormValidator[EntityType any, ValidatedType any] interface {
-	Validate(*map[string]any, *EntityType, *gin.Context) error
+type FormValidator[EntityType any, ValidateType any] interface {
+	Validate(*ValidateType, *EntityType, *gin.Context) error
 }
 
 type PermissionChecker interface {
