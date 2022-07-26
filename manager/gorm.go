@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var _ Manager[any, any] = &GormManager[any, any, any]{}
+
 type GormScopeGenerator func(c *gin.Context) func(*gorm.DB) *gorm.DB
 type GormPaginateFunc[EntityType any] func(*[]*EntityType, *map[string]any, *gorm.DB, *gin.Context) error
 type GormCreateFunc[EntityType, ValidateType any] func(**EntityType, *ValidateType, *gorm.DB, *gin.Context) error
@@ -18,7 +20,7 @@ type GormDeleteFunc[EntityType, ValidateType any] func(**EntityType, *gorm.DB, *
 type GormLimitOffsetPaginator struct {
 	Offset    uint `form:"offset"`
 	Limit     uint `form:"limit"`
-	WithCount bool `form:"withCount"`
+	WithCount bool `form:"with_count"`
 }
 
 type GormManager[EntityType any, ValidateType, URIType any] struct {

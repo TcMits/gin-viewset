@@ -6,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var _ ExceptionHandler = &DefaultExceptionHandler{}
+
 type ViewSetError struct {
 	message    string
 	StatusCode int

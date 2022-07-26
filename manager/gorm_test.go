@@ -169,7 +169,7 @@ func (s *dbSuite) TestGormManagerGetQuerySet() {
 }
 
 func (s *dbSuite) TestDefaultPaginateFunc() {
-	mockURL, _ := url.Parse("https://example.com/?limit=1&offset=0&withCount=true")
+	mockURL, _ := url.Parse("https://example.com/?limit=1&offset=0&with_count=true")
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = &http.Request{
@@ -208,13 +208,13 @@ func (s *dbSuite) TestDefaultPaginateFunc() {
 	assert.Equal(s.T(), 1, len(entities))
 	assert.Equal(s.T(), "phuc", entities[0].Name)
 	assert.Equal(s.T(), uint(1), entities[0].ID)
-	assert.Equal(s.T(), "https://example.com/?limit=1&offset=1&withCount=true", paginatedMeta["next"])
+	assert.Equal(s.T(), "https://example.com/?limit=1&offset=1&with_count=true", paginatedMeta["next"])
 	assert.Equal(s.T(), nil, paginatedMeta["previous"])
 	assert.Equal(s.T(), int64(2), paginatedMeta["count"])
 }
 
 func (s *dbSuite) TestDefaultPaginateFuncWithBindError() {
-	mockURL, _ := url.Parse("https://example.com/?limit=1&offset=-1&withCount=true")
+	mockURL, _ := url.Parse("https://example.com/?limit=1&offset=-1&with_count=true")
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = &http.Request{

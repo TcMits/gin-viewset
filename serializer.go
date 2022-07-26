@@ -5,6 +5,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+var _ Serializer[any] = &DefaultSerializer[any]{}
+
 type DefaultSerializer[EntityType any] struct {
 	AdditionalField map[string]Field[EntityType]
 }

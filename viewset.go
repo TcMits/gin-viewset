@@ -128,8 +128,8 @@ func NewViewSet[EntityType, ValidateType any](
 	return viewSet
 }
 
-func (viewSet *ViewSet[_, _]) Register(handler gin.IRouter) {
-	gr := handler.Group(viewSet.BasePath)
+func (viewSet *ViewSet[_, _]) Register(handler gin.IRouter, handleFuncs ...gin.HandlerFunc) {
+	gr := handler.Group(viewSet.BasePath, handleFuncs...)
 	{
 		for _, route := range viewSet.Actions {
 			gr.Handle(
